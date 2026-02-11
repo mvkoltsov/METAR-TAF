@@ -24,8 +24,16 @@ object MetarParser {
     // Regex для облачности: FEW015, SCT020, BKN030, OVC040
     private val CLOUD_REGEX = Regex("""\b(FEW|SCT|BKN|OVC)(\d{3})\b""")
 
-    // Regex для погодных явлений
-    private val WX_REGEX = Regex("""(?:\+|-|VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|HZ|FU|DU|SA|VA|PO|SQ|FC|SS|DS))""")
+    // Regex для погодных явлений - более строгий с границами слов
+    // Формат: [интенсивность][дескриптор][явление]
+    private val WX_REGEX = Regex("""\s([-+]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|HZ|FU|DU|SA|VA|PO|SQ|FC|SS|DS)+)\s""")
+
+    // Список всех допустимых погодных явлений для валидации
+    private val VALID_WX_CODES = setOf(
+        "DZ", "RA", "SN", "SG", "IC", "PL", "GR", "GS", "UP",  // Осадки
+        "FG", "BR", "HZ", "FU", "DU", "SA", "VA",               // Туман/дымка
+        "PO", "SQ", "FC", "SS", "DS"                            // Прочее
+    )
 
     /**
      * Парсит raw METAR строку и возвращает MetarData
@@ -141,7 +149,64 @@ object MetarParser {
     }
 
     private fun parseWeather(raw: String): List<String> {
-        return WX_REGEX.findAll(raw).map { it.value }.toList()
+        // Добавляем пробелы по краям для корректного поиска
+        val paddedRaw = " $raw "
+
+        val result = mutableListOf<String>()
+
+        // Ищем все совпадения
+        WX_REGEX.findAll(paddedRaw).forEach { match ->
+            val code = match.groupValues[1].trim()
+            if (code.isNotEmpty() && isValidWeatherCode(code)) {
+                result.add(code)
+            }
+        }
+
+        return result.distinct()
+    }
+
+    /**
+     * Проверяет, является ли код допустимым погодным явлением
+     */
+    private fun isValidWeatherCode(code: String): Boolean {
+        var c = code.uppercase()
+
+        // Убираем интенсивность
+        if (c.startsWith("+") || c.startsWith("-")) {
+            c = c.substring(1)
+        }
+
+        // Убираем VC (в окрестности)
+        if (c.startsWith("VC")) {
+            c = c.substring(2)
+        }
+
+        // Убираем дескрипторы
+        val descriptors = listOf("MI", "PR", "BC", "DR", "BL", "SH", "TS", "FZ")
+        for (desc in descriptors) {
+            if (c.startsWith(desc)) {
+                c = c.substring(2)
+                break
+            }
+        }
+
+        // Проверяем, что осталось хотя бы одно валидное явление
+        if (c.isEmpty()) return false
+
+        // Проверяем каждые 2 символа
+        var i = 0
+        var hasValidPhenomenon = false
+        while (i + 1 < c.length) {
+            val twoChar = c.substring(i, i + 2)
+            if (twoChar in VALID_WX_CODES) {
+                hasValidPhenomenon = true
+                i += 2
+            } else {
+                return false // Неизвестный код
+            }
+        }
+
+        return hasValidPhenomenon
     }
 
     /**

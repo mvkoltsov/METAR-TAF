@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meteometar.data.AirportData
+import com.example.meteometar.data.RunwayDatabase
 import com.example.meteometar.data.TafData
 import com.example.meteometar.ui.theme.*
 
@@ -68,11 +69,41 @@ fun TafCard(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Text(
-                        text = taf.icao,
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = taf.icao,
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                        // Информация о ВПП
+                        val runwayInfo = RunwayDatabase.getRunwayInfo(taf.icao)
+                        if (runwayInfo.isNotEmpty()) {
+                            Text(
+                                text = " • ",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                            Text(
+                                text = "ВПП: $runwayInfo",
+                                fontSize = 12.sp,
+                                color = Color(0xFF81C784),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    // Активная ВПП на основе ветра из TAF
+                    val activeRwy = RunwayDatabase.getActiveRunway(taf.icao, taf.wind.directionDeg)
+                    if (activeRwy != null) {
+                        Text(
+                            text = "✈ Рабочая: $activeRwy",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64B5F6),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 // Кнопка избранного

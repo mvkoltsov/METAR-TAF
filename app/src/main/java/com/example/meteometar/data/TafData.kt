@@ -113,14 +113,15 @@ data class TafData(
         }
 
         val descriptorsList = listOf(
-            "TS" to "гроза", "SH" to "ливневый", "FZ" to "переохлаждённый",
+            "TS" to "гроза с", "SH" to "ливневой", "FZ" to "переохлаждённый",
             "MI" to "низкий", "PR" to "частичный", "BC" to "клочьями",
             "DR" to "низовая метель", "BL" to "метель"
         )
 
+        var descriptor = ""
         for ((key, value) in descriptorsList) {
             if (c.startsWith(key)) {
-                result.append("$value ")
+                descriptor = value
                 c = c.removePrefix(key)
                 break
             }
@@ -136,13 +137,30 @@ data class TafData(
             "SQ" to "шквал", "FC" to "смерч", "DS" to "пылевая буря", "SS" to "песчаная буря"
         )
 
-        for ((key, value) in phenomena) {
-            if (c.contains(key)) {
-                result.append(value)
-                break
-            }
+        // Собираем все явления из оставшейся части
+        val phenomenaList = mutableListOf<String>()
+        var i = 0
+        while (i + 1 < c.length) {
+            val twoChar = c.substring(i, i + 2)
+            phenomena[twoChar]?.let { phenomenaList.add(it) }
+            i += 2
         }
 
-        return result.toString().trim().ifEmpty { code }
+        if (c.length == 2) {
+            phenomenaList.clear()
+            phenomena[c]?.let { phenomenaList.add(it) }
+        }
+
+        if (descriptor.isNotEmpty()) {
+            result.append("$descriptor ")
+        }
+
+        if (phenomenaList.isNotEmpty()) {
+            result.append(phenomenaList.joinToString(" со "))
+        } else if (c.isNotEmpty()) {
+            result.append(phenomena[c] ?: c)
+        }
+
+        return result.toString().trim()
     }
 }

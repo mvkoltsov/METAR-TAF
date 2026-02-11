@@ -20,8 +20,15 @@ object TafParser {
     // Regex для облачности
     private val CLOUD_REGEX = Regex("""\b(FEW|SCT|BKN|OVC|VV)(\d{3})(CB|TCU)?\b""")
 
-    // Regex для погодных явлений
-    private val WX_REGEX = Regex("""(?:\+|-|VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|HZ|FU|DU|SA|VA|PO|SQ|FC|SS|DS))""")
+    // Regex для погодных явлений - более строгий с границами
+    private val WX_REGEX = Regex("""\s([-+]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|HZ|FU|DU|SA|VA|PO|SQ|FC|SS|DS)+)\s""")
+
+    // Список допустимых погодных явлений
+    private val VALID_WX_CODES = setOf(
+        "DZ", "RA", "SN", "SG", "IC", "PL", "GR", "GS", "UP",
+        "FG", "BR", "HZ", "FU", "DU", "SA", "VA",
+        "PO", "SQ", "FC", "SS", "DS"
+    )
 
     // Regex для изменений FM
     private val FM_REGEX = Regex("""FM(\d{6})""")
@@ -139,7 +146,53 @@ object TafParser {
     }
 
     private fun parseWeather(raw: String): List<String> {
-        return WX_REGEX.findAll(raw).map { it.value }.toList()
+        val paddedRaw = " $raw "
+        val result = mutableListOf<String>()
+
+        WX_REGEX.findAll(paddedRaw).forEach { match ->
+            val code = match.groupValues[1].trim()
+            if (code.isNotEmpty() && isValidWeatherCode(code)) {
+                result.add(code)
+            }
+        }
+
+        return result.distinct()
+    }
+
+    private fun isValidWeatherCode(code: String): Boolean {
+        var c = code.uppercase()
+
+        if (c.startsWith("+") || c.startsWith("-")) {
+            c = c.substring(1)
+        }
+
+        if (c.startsWith("VC")) {
+            c = c.substring(2)
+        }
+
+        val descriptors = listOf("MI", "PR", "BC", "DR", "BL", "SH", "TS", "FZ")
+        for (desc in descriptors) {
+            if (c.startsWith(desc)) {
+                c = c.substring(2)
+                break
+            }
+        }
+
+        if (c.isEmpty()) return false
+
+        var i = 0
+        var hasValidPhenomenon = false
+        while (i + 1 < c.length) {
+            val twoChar = c.substring(i, i + 2)
+            if (twoChar in VALID_WX_CODES) {
+                hasValidPhenomenon = true
+                i += 2
+            } else {
+                return false
+            }
+        }
+
+        return hasValidPhenomenon
     }
 
     private fun parseChanges(raw: String): List<TafChange> {

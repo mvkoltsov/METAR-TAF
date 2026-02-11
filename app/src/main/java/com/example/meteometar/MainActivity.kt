@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
+        // Экран не гаснет пока приложение открыто
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         setContent {
             METEOMETARTheme(dynamicColor = false) {
                 MeteoApp(

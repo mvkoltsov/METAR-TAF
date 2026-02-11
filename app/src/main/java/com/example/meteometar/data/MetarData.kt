@@ -123,22 +123,23 @@ data class MetarData(
             c = c.drop(2)
         }
 
-        // Дескрипторы (проверяем по порядку, начиная с более длинных)
+        // Дескрипторы
         val descriptorsList = listOf(
-            "TS" to "гроза", "SH" to "ливневый", "FZ" to "переохлаждённый",
+            "TS" to "гроза с", "SH" to "ливневой", "FZ" to "переохлаждённый",
             "MI" to "низкий", "PR" to "частичный", "BC" to "клочьями",
             "DR" to "низовая метель", "BL" to "метель"
         )
 
+        var descriptor = ""
         for ((key, value) in descriptorsList) {
             if (c.startsWith(key)) {
-                result.append("$value ")
+                descriptor = value
                 c = c.removePrefix(key)
-                break  // Берём только первый найденный дескриптор
+                break
             }
         }
 
-        // Основные явления (проверяем точное совпадение оставшейся части)
+        // Основные явления - парсим ВСЕ двухбуквенные коды
         val phenomena = mapOf(
             "DZ" to "морось", "RA" to "дождь", "SN" to "снег",
             "SG" to "снежные зёрна", "IC" to "ледяные кристаллы",
@@ -149,7 +150,32 @@ data class MetarData(
             "SQ" to "шквал", "FC" to "смерч", "DS" to "пылевая буря", "SS" to "песчаная буря"
         )
 
-        result.append(phenomena[c] ?: c)
+        // Собираем все явления из оставшейся части
+        val phenomenaList = mutableListOf<String>()
+        var i = 0
+        while (i + 1 < c.length) {
+            val twoChar = c.substring(i, i + 2)
+            phenomena[twoChar]?.let { phenomenaList.add(it) }
+            i += 2
+        }
+
+        // Если есть только одно явление - оставляем его как есть
+        if (c.length == 2) {
+            phenomenaList.clear()
+            phenomena[c]?.let { phenomenaList.add(it) }
+        }
+
+        // Формируем итоговую строку
+        if (descriptor.isNotEmpty()) {
+            result.append("$descriptor ")
+        }
+
+        if (phenomenaList.isNotEmpty()) {
+            result.append(phenomenaList.joinToString(" со "))
+        } else if (c.isNotEmpty()) {
+            result.append(phenomena[c] ?: c)
+        }
+
         return result.toString().trim()
     }
 }
