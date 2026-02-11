@@ -1,0 +1,558 @@
+package com.example.meteometar.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.meteometar.data.Country
+import com.example.meteometar.data.MetarData
+import com.example.meteometar.data.SortOption
+import com.example.meteometar.ui.components.MetarCard
+import com.example.meteometar.ui.theme.DarkBackground
+import com.example.meteometar.ui.theme.DarkCard
+import com.example.meteometar.ui.theme.DarkSurface
+import com.example.meteometar.viewmodel.MetarUiState
+import com.example.meteometar.viewmodel.MetarViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+/**
+ * Главный экран со списком METAR
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MetarListScreen(
+    viewModel: MetarViewModel,
+    onMetarClick: (MetarData) -> Unit = {},
+    onFavoritesClick: () -> Unit = {},
+    onExit: () -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            MetarTopBar(
+                searchQuery = uiState.searchQuery,
+                onSearchChange = viewModel::updateSearchQuery,
+                onRefresh = viewModel::loadMetar,
+                isLoading = uiState.isLoading,
+                sortOption = uiState.sortOption,
+                onSortClick = { showSortMenu = true },
+                favoritesCount = uiState.favorites.size,
+                onFavoritesClick = onFavoritesClick,
+                onExit = onExit
+            )
+        },
+        containerColor = DarkBackground
+    ) { paddingValues ->
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadMetar() },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Выбор страны (выпадающий список)
+                CountryDropdown(
+                    countries = uiState.countries,
+                    selectedCountries = uiState.selectedCountries,
+                    onCountryToggle = viewModel::toggleCountry
+                )
+
+                // Статус бар
+                StatusBar(
+                    count = uiState.metarList.size,
+                    lastUpdate = uiState.lastUpdate,
+                    isLoading = uiState.isLoading,
+                    error = uiState.error
+                )
+
+                // Список METAR
+                if (uiState.isLoading && uiState.metarList.isEmpty()) {
+                    LoadingContent()
+                } else if (uiState.metarList.isEmpty()) {
+                    EmptyContent(
+                        message = if (uiState.searchQuery.isNotEmpty()) {
+                            "Ничего не найдено по запросу \"${uiState.searchQuery}\""
+                        } else {
+                            "Нет данных. Выберите страны и нажмите обновить."
+                        }
+                    )
+                } else {
+                    MetarList(
+                        metarList = uiState.metarList,
+                        favorites = uiState.favorites,
+                        onMetarClick = onMetarClick,
+                        onFavoriteClick = viewModel::toggleFavorite
+                    )
+                }
+            }
+        }
+    }
+
+    // Меню выбора сортировки
+    if (showSortMenu) {
+        SortMenuDialog(
+            currentOption = uiState.sortOption,
+            onOptionSelected = {
+                viewModel.setSortOption(it)
+                showSortMenu = false
+            },
+            onDismiss = { showSortMenu = false }
+        )
+    }
+
+    // Показываем ошибку
+    uiState.error?.let { error ->
+        LaunchedEffect(error) {
+            kotlinx.coroutines.delay(5000)
+            viewModel.clearError()
+        }
+    }
+}
+
+/**
+ * Выпадающий список для выбора страны
+ */
+@Composable
+fun CountryDropdown(
+    countries: List<Country>,
+    selectedCountries: Set<String>,
+    onCountryToggle: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    // Формируем текст для отображения выбранных стран
+    val selectedText = if (selectedCountries.isEmpty()) {
+        "Выберите страны"
+    } else {
+        val selectedNames = countries
+            .filter { it.code in selectedCountries }
+            .map { "${it.flag} ${it.name}" }
+        if (selectedNames.size <= 2) {
+            selectedNames.joinToString(", ")
+        } else {
+            "${selectedNames.take(2).joinToString(", ")} +${selectedNames.size - 2}"
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        // Кнопка раскрытия
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color.White
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = Color.Gray
+            )
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedText,
+                    fontSize = 14.sp,
+                    color = Color.White,
+                    maxLines = 1
+                )
+                Text(
+                    text = if (expanded) "▲" else "▼",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+
+        // Выпадающее меню
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .background(DarkSurface)
+        ) {
+            countries.forEach { country ->
+                val isSelected = country.code in selectedCountries
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = country.flag,
+                                    fontSize = 20.sp,
+                                    modifier = Modifier.padding(end = 12.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = country.name,
+                                        fontSize = 15.sp,
+                                        color = Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        text = "${country.airports.size} аэропортов",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Text(
+                                    text = "✓",
+                                    fontSize = 18.sp,
+                                    color = Color(0xFF22A559),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onCountryToggle(country.code)
+                    },
+                    modifier = Modifier.background(
+                        if (isSelected) Color(0xFF2A3A4A) else Color.Transparent
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Диалог выбора сортировки
+ */
+@Composable
+fun SortMenuDialog(
+    currentOption: SortOption,
+    onOptionSelected: (SortOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Сортировка",
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column {
+                SortOption.entries.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOptionSelected(option) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = option == currentOption,
+                            onClick = { onOptionSelected(option) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = Color(0xFF3D7AD9)
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = option.displayName,
+                            color = Color.White,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Закрыть", color = Color(0xFF3D7AD9))
+            }
+        },
+        containerColor = DarkSurface
+    )
+}
+
+/**
+ * Верхняя панель с поиском
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MetarTopBar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    onRefresh: () -> Unit,
+    isLoading: Boolean,
+    sortOption: SortOption,
+    onSortClick: () -> Unit,
+    favoritesCount: Int,
+    onFavoritesClick: () -> Unit,
+    onExit: () -> Unit = {}
+) {
+    Surface(
+        color = DarkSurface,
+        shadowElevation = 4.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // Заголовок
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Метео METAR",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                Row {
+                    // Кнопка избранного с бейджем
+                    BadgedBox(
+                        badge = {
+                            if (favoritesCount > 0) {
+                                Badge(
+                                    containerColor = Color(0xFFFFD700)
+                                ) {
+                                    Text(
+                                        text = favoritesCount.toString(),
+                                        fontSize = 10.sp,
+                                        color = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onFavoritesClick) {
+                            Text(
+                                text = "⭐",
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
+
+                    // Кнопка сортировки
+                    IconButton(onClick = onSortClick) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Сортировка",
+                            tint = Color.White
+                        )
+                    }
+
+                    // Кнопка обновления
+                    IconButton(
+                        onClick = onRefresh,
+                        enabled = !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Обновить",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Поле поиска
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text(
+                        text = "Поиск: ИКАО / город / явления...",
+                        color = Color.Gray
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Поиск",
+                        tint = Color.Gray
+                    )
+                },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF3D7AD9),
+                    unfocusedBorderColor = Color.Gray,
+                    cursorColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Статус бар
+ */
+@Composable
+fun StatusBar(
+    count: Int,
+    lastUpdate: Long,
+    isLoading: Boolean,
+    error: String?
+) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DarkSurface)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Количество аэропортов
+        Text(
+            text = "Аэропортов: $count",
+            fontSize = 13.sp,
+            color = Color.Gray
+        )
+
+        // Статус/Время обновления
+        if (error != null) {
+            Text(
+                text = "Ошибка",
+                fontSize = 13.sp,
+                color = Color(0xFFD9534F)
+            )
+        } else if (isLoading) {
+            Text(
+                text = "Обновление...",
+                fontSize = 13.sp,
+                color = Color(0xFF3D7AD9)
+            )
+        } else if (lastUpdate > 0) {
+            Text(
+                text = "Обновлено: ${timeFormat.format(Date(lastUpdate))}",
+                fontSize = 13.sp,
+                color = Color.Gray
+            )
+        }
+    }
+}
+
+/**
+ * Список METAR
+ */
+@Composable
+fun MetarList(
+    metarList: List<MetarData>,
+    favorites: Set<String>,
+    onMetarClick: (MetarData) -> Unit,
+    onFavoriteClick: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(
+            items = metarList,
+            key = { it.icao }
+        ) { metar ->
+            MetarCard(
+                metar = metar,
+                isFavorite = metar.icao in favorites,
+                onFavoriteClick = { onFavoriteClick(metar.icao) },
+                onClick = { onMetarClick(metar) }
+            )
+        }
+    }
+}
+
+/**
+ * Индикатор загрузки
+ */
+@Composable
+fun LoadingContent() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                color = Color(0xFF3D7AD9),
+                strokeWidth = 4.dp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Загрузка данных METAR...",
+                fontSize = 16.sp,
+                color = Color.Gray
+            )
+        }
+    }
+}
+
+/**
+ * Пустой контент
+ */
+@Composable
+fun EmptyContent(message: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            fontSize = 16.sp,
+            color = Color.Gray
+        )
+    }
+}
+
+
