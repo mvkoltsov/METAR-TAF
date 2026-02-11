@@ -413,7 +413,14 @@ class NOTAMCollector:
         try:
             if len(dt_str) == 10:
                 # YYMMDDHHmm
-                year = 2000 + int(dt_str[0:2])
+                year = int(dt_str[0:2])
+                # Определяем век: если год > текущий год + 5, считаем что это прошлый век
+                current_year = datetime.now().year % 100
+                if year > current_year + 5:
+                    year = 1900 + year
+                else:
+                    year = 2000 + year
+                
                 month = int(dt_str[2:4])
                 day = int(dt_str[4:6])
                 hour = int(dt_str[6:8])

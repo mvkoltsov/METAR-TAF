@@ -327,7 +327,6 @@ ABBREVIATIONS = {
     'REF': 'ссылка',
     'REFERENCE': 'ссылка',
     'SEE': 'смотреть',
-    'REF': 'см.',
     'ACN': 'классификационное число воздушного судна',
     'PCN': 'классификационное число покрытия',
     'MAX': 'максимум',
@@ -347,9 +346,6 @@ ABBREVIATIONS = {
 
 class NOTAMDecoder:
     """Декодер NOTAM в человеко-читаемый формат"""
-    
-    def __init__(self):
-        pass
     
     def decode(self, notam_data: Dict) -> Dict:
         """
