@@ -34,13 +34,14 @@ fun FlightCategory.getColor(): Color = when (this) {
 }
 
 /**
- * Карточка METAR данных
+ * Карточка METAR данных - КОМПАКТНАЯ версия
  */
 @Composable
 fun MetarCard(
     metar: MetarData,
     isFavorite: Boolean = false,
     onFavoriteClick: () -> Unit = {},
+    onNotamClick: () -> Unit = {},
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -53,143 +54,186 @@ fun MetarCard(
         colors = CardDefaults.cardColors(
             containerColor = DarkCard
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(8.dp)
         ) {
-            // Верхняя строка: Флаг, Город, ICAO, Избранное, Категория
+            // Строка 1: Флаг, Город (ICAO), ВПП, Рабочая, ⭐, Категория, NOTAM
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Флаг страны
+                // Флаг
                 if (country != null) {
-                    Text(
-                        text = country.flag,
-                        fontSize = 24.sp,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+                    Text(text = country.flag, fontSize = 16.sp)
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = metar.cityName,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                // Город (ICAO) - основная информация
+                Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = metar.icao,
-                            fontSize = 14.sp,
+                            text = metar.cityName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text(
+                            text = " (${metar.icao})",
+                            fontSize = 12.sp,
                             color = Color.Gray
                         )
-                        // Информация о ВПП
-                        val runwayInfo = RunwayDatabase.getRunwayInfo(metar.icao)
-                        if (runwayInfo.isNotEmpty()) {
-                            Text(
-                                text = " • ",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                            Text(
-                                text = "ВПП: $runwayInfo",
-                                fontSize = 12.sp,
-                                color = Color(0xFF81C784),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
-                    // Активная ВПП на основе ветра
+                    // ВПП + Рабочая в одну строку
+                    val runwayInfo = RunwayDatabase.getRunwayInfo(metar.icao)
                     val activeRwy = RunwayDatabase.getActiveRunway(metar.icao, metar.wind.directionDeg)
-                    if (activeRwy != null) {
-                        Text(
-                            text = "✈ Рабочая: $activeRwy",
-                            fontSize = 11.sp,
-                            color = Color(0xFF64B5F6),
-                            fontWeight = FontWeight.Medium
-                        )
+                    if (runwayInfo.isNotEmpty() || activeRwy != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (runwayInfo.isNotEmpty()) {
+                                Text(text = runwayInfo, fontSize = 10.sp, color = Color(0xFF81C784))
+                            }
+                            if (activeRwy != null) {
+                                Text(text = if (runwayInfo.isNotEmpty()) " → $activeRwy" else "→ $activeRwy",
+                                     fontSize = 10.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
 
-                // Кнопка избранного
-                IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
+                // Избранное
+                IconButton(onClick = onFavoriteClick, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
-                        contentDescription = if (isFavorite) "Убрать из избранного" else "Добавить в избранное",
-                        tint = if (isFavorite) Color(0xFFFFD700) else Color.Gray
+                        contentDescription = null,
+                        tint = if (isFavorite) Color(0xFFFFD700) else Color.Gray,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                // Категория
+                CompactCategoryBadge(category = metar.flightCategory)
 
-                // Бейдж категории
-                CategoryBadge(category = metar.flightCategory)
+                // NOTAM
+                if (metar.notamCount > 0) {
+                    Spacer(modifier = Modifier.width(2.dp))
+                    CompactNotamBadge(count = metar.notamCount, onClick = onNotamClick)
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Данные в двух колонках
+            // Строка 2: Ветер | Видимость | Облачность | Темп/Роса | QNH
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Левая колонка
-                Column(modifier = Modifier.weight(1f)) {
-                    DataRow(label = "Ветер", value = metar.wind.toDisplayString())
-                    DataRow(label = "Видимость", value = metar.getVisibilityString())
-                    DataRow(label = "Облачность", value = metar.getCloudsDisplay())
-                }
-
-                // Правая колонка
-                Column(modifier = Modifier.weight(1f)) {
-                    DataRow(
-                        label = "Температура",
-                        value = metar.tempC?.let { "${it.toInt()}°C" } ?: ""
-                    )
-                    DataRow(
-                        label = "Точка росы",
-                        value = metar.dewpointC?.let { "${it.toInt()}°C" } ?: ""
-                    )
-                    DataRow(
-                        label = "QNH",
-                        value = metar.qnhMmHg?.let { "$it мм.рт.ст" } ?: ""
-                    )
-                }
+                // Ветер
+                CompactDataItem(label = "💨", value = metar.wind.toDisplayString(), modifier = Modifier.weight(1f))
+                // Видимость
+                CompactDataItem(label = "👁", value = metar.getVisibilityString(), modifier = Modifier.weight(0.8f))
+                // Облачность
+                CompactDataItem(label = "☁", value = metar.getCloudsDisplay(), modifier = Modifier.weight(1f))
+                // Температура/Роса
+                val tempDew = "${metar.tempC?.toInt() ?: "-"}/${metar.dewpointC?.toInt() ?: "-"}°"
+                CompactDataItem(label = "🌡", value = tempDew, modifier = Modifier.weight(0.7f))
+                // QNH
+                CompactDataItem(label = "📊", value = "${metar.qnhMmHg ?: "-"}", modifier = Modifier.weight(0.6f))
             }
 
-            // Погодные явления
+            // Строка 3: Явления + Время (только если есть)
             val weather = metar.getWeatherDisplay()
-            if (weather.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Явления: $weather",
-                    fontSize = 13.sp,
-                    color = Color(0xFFFFB74D),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Время наблюдения
             val time = metar.getTimeDisplay()
-            if (time.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Время: $time",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+            if (weather.isNotEmpty() || time.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (weather.isNotEmpty()) {
+                        Text(
+                            text = weather,
+                            fontSize = 11.sp,
+                            color = Color(0xFFFFB74D),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (time.isNotEmpty()) {
+                        Text(
+                            text = time,
+                            fontSize = 10.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * Компактный элемент данных
+ */
+@Composable
+fun CompactDataItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontSize = 10.sp)
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Компактный бейдж категории
+ */
+@Composable
+fun CompactCategoryBadge(category: FlightCategory) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(category.getColor())
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = category.name,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+    }
+}
+
+/**
+ * Компактный индикатор NOTAM
+ */
+@Composable
+fun CompactNotamBadge(count: Int, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color(0xFFFF9800))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = "⚠$count",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
     }
 }
 
@@ -320,6 +364,43 @@ fun MetarCompactCard(
                     color = Color.White
                 )
             }
+        }
+    }
+}
+
+/**
+ * Индикатор NOTAM на карточке
+ */
+@Composable
+fun NotamBadge(
+    count: Int,
+    hasImportant: Boolean = false,
+    onClick: () -> Unit
+) {
+    val backgroundColor = if (hasImportant) Color(0xFFE53935) else Color(0xFFFF9800)
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = "⚠",
+                fontSize = 10.sp,
+                color = Color.White
+            )
+            Text(
+                text = if (count > 1) "NOTAM($count)" else "NOTAM",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
         }
     }
 }

@@ -87,7 +87,7 @@ class SettingsManager(context: Context) {
     }
 
     /**
-     * Загрузить избранные аэропорты
+     * Загрузить избранные аэродромы
      */
     private fun loadFavorites(): Set<String> {
         return prefs.getStringSet(KEY_FAVORITES, emptySet()) ?: emptySet()
@@ -108,7 +108,7 @@ class SettingsManager(context: Context) {
     }
 
     /**
-     * Проверить, является ли аэропорт избранным
+     * Проверить, является ли аэродром избранным
      */
     fun isFavorite(icao: String): Boolean = icao in _favorites.value
 

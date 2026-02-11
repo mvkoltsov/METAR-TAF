@@ -21,7 +21,7 @@ object MetarRepository {
     private const val TIMEOUT_MS = 30000
 
     /**
-     * Получает METAR данные для указанного списка аэропортов
+     * Получает METAR данные для указанного списка аэродромов
      */
     suspend fun fetchMetarForAirports(icaoList: List<String>): Result<Map<String, MetarData>> =
         withContext(Dispatchers.IO) {
@@ -45,7 +45,7 @@ object MetarRepository {
         }
 
     /**
-     * Получает METAR данные для всех казахстанских аэропортов (для обратной совместимости)
+     * Получает METAR данные для всех казахстанских аэродромов (для обратной совместимости)
      */
     suspend fun fetchAllMetar(): Result<Map<String, MetarData>> =
         fetchMetarForAirports(AirportData.ICAO_LIST)

@@ -18,19 +18,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meteometar.data.Country
 import com.example.meteometar.data.MetarData
 import com.example.meteometar.data.SortOption
 import com.example.meteometar.ui.components.MetarCard
+import com.example.meteometar.ui.components.NotamDialog
 import com.example.meteometar.ui.theme.DarkBackground
 import com.example.meteometar.ui.theme.DarkCard
 import com.example.meteometar.ui.theme.DarkSurface
-import com.example.meteometar.viewmodel.MetarUiState
 import com.example.meteometar.viewmodel.MetarViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * Главный экран со списком METAR
@@ -45,20 +47,59 @@ fun MetarListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
+    var selectedMetarForNotam by remember { mutableStateOf<MetarData?>(null) }
+
+    // Диалог NOTAM
+    selectedMetarForNotam?.let { metar: MetarData ->
+        NotamDialog(
+            icao = metar.icao,
+            cityName = metar.cityName,
+            notamList = metar.notamList,
+            onDismiss = { selectedMetarForNotam = null }
+        )
+    }
 
     Scaffold(
         topBar = {
-            MetarTopBar(
-                searchQuery = uiState.searchQuery,
-                onSearchChange = viewModel::updateSearchQuery,
-                onRefresh = viewModel::loadMetar,
-                isLoading = uiState.isLoading,
-                sortOption = uiState.sortOption,
-                onSortClick = { showSortMenu = true },
-                favoritesCount = uiState.favorites.size,
-                onFavoritesClick = onFavoritesClick,
-                onExit = onExit
-            )
+            Surface(
+                color = DarkSurface,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Выбор страны (компактный)
+                    CountryDropdown(
+                        countries = uiState.countries,
+                        selectedCountries = uiState.selectedCountries,
+                        onCountryToggle = viewModel::toggleCountry
+                    )
+
+                    // Статус: количество и время обновления
+                    CompactStatusInfo(
+                        count = uiState.metarList.size,
+                        lastUpdate = uiState.lastUpdate,
+                        isLoading = uiState.isLoading
+                    )
+
+                    // Кнопки (избранное, сортировка, обновить)
+                    MetarTopBar(
+                        searchQuery = uiState.searchQuery,
+                        onSearchChange = viewModel::updateSearchQuery,
+                        onRefresh = viewModel::loadMetar,
+                        isLoading = uiState.isLoading,
+                        sortOption = uiState.sortOption,
+                        onSortClick = { showSortMenu = true },
+                        favoritesCount = uiState.favorites.size,
+                        onFavoritesClick = onFavoritesClick,
+                        onExit = onExit
+                    )
+                }
+            }
         },
         containerColor = DarkBackground
     ) { paddingValues ->
@@ -72,21 +113,6 @@ fun MetarListScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Выбор страны (выпадающий список)
-                CountryDropdown(
-                    countries = uiState.countries,
-                    selectedCountries = uiState.selectedCountries,
-                    onCountryToggle = viewModel::toggleCountry
-                )
-
-                // Статус бар
-                StatusBar(
-                    count = uiState.metarList.size,
-                    lastUpdate = uiState.lastUpdate,
-                    isLoading = uiState.isLoading,
-                    error = uiState.error
-                )
-
                 // Список METAR
                 if (uiState.isLoading && uiState.metarList.isEmpty()) {
                     LoadingContent()
@@ -103,7 +129,8 @@ fun MetarListScreen(
                         metarList = uiState.metarList,
                         favorites = uiState.favorites,
                         onMetarClick = onMetarClick,
-                        onFavoriteClick = viewModel::toggleFavorite
+                        onFavoriteClick = viewModel::toggleFavorite,
+                        onNotamClick = { metar -> selectedMetarForNotam = metar }
                     )
                 }
             }
@@ -132,7 +159,7 @@ fun MetarListScreen(
 }
 
 /**
- * Выпадающий список для выбора страны
+ * Компактный выбор страны + кнопки в одну строку
  */
 @Composable
 fun CountryDropdown(
@@ -142,36 +169,37 @@ fun CountryDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Формируем текст для отображения выбранных стран
     val selectedText = if (selectedCountries.isEmpty()) {
-        "Выберите страны"
+        "Страны"
     } else {
-        val selectedNames = countries
-            .filter { it.code in selectedCountries }
-            .map { "${it.flag} ${it.name}" }
-        if (selectedNames.size <= 2) {
-            selectedNames.joinToString(", ")
+        val count = selectedCountries.size
+        if (count == 1) {
+            val country = countries.find { it.code in selectedCountries }
+            "${country?.flag ?: ""} ${country?.name ?: "Страны"}"
         } else {
-            "${selectedNames.take(2).joinToString(", ")} +${selectedNames.size - 2}"
+            val country = countries.find { it.code in selectedCountries }
+            "${country?.flag ?: ""} ${country?.name ?: ""} +${count - 1}"
         }
     }
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .width(130.dp)
     ) {
-        // Кнопка раскрытия
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = Color.White
             ),
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = Color.Gray
-            )
+            ),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -180,24 +208,25 @@ fun CountryDropdown(
             ) {
                 Text(
                     text = selectedText,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = Color.White,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = if (expanded) "▲" else "▼",
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = Color.Gray
                 )
             }
         }
 
-        // Выпадающее меню
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .width(180.dp)
                 .background(DarkSurface)
         ) {
             countries.forEach { country ->
@@ -209,31 +238,15 @@ fun CountryDropdown(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = country.flag,
-                                    fontSize = 20.sp,
-                                    modifier = Modifier.padding(end = 12.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = country.name,
-                                        fontSize = 15.sp,
-                                        color = Color.White,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                    Text(
-                                        text = "${country.airports.size} аэропортов",
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "${country.flag} ${country.name}",
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
                             if (isSelected) {
                                 Text(
                                     text = "✓",
-                                    fontSize = 18.sp,
-                                    color = Color(0xFF22A559),
+                                    color = Color(0xFF3D7AD9),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -241,15 +254,13 @@ fun CountryDropdown(
                     },
                     onClick = {
                         onCountryToggle(country.code)
-                    },
-                    modifier = Modifier.background(
-                        if (isSelected) Color(0xFF2A3A4A) else Color.Transparent
-                    )
+                    }
                 )
             }
         }
     }
 }
+
 
 /**
  * Диалог выбора сортировки
@@ -306,7 +317,7 @@ fun SortMenuDialog(
 }
 
 /**
- * Верхняя панель с поиском
+ * Компактная панель только с кнопками (без Surface)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -321,120 +332,111 @@ fun MetarTopBar(
     onFavoritesClick: () -> Unit,
     onExit: () -> Unit = {}
 ) {
-    Surface(
-        color = DarkSurface,
-        shadowElevation = 4.dp
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            // Заголовок
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Метео METAR",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Row {
-                    // Кнопка избранного с бейджем
-                    BadgedBox(
-                        badge = {
-                            if (favoritesCount > 0) {
-                                Badge(
-                                    containerColor = Color(0xFFFFD700)
-                                ) {
-                                    Text(
-                                        text = favoritesCount.toString(),
-                                        fontSize = 10.sp,
-                                        color = Color.Black
-                                    )
-                                }
-                            }
-                        }
+        // Кнопка избранного
+        BadgedBox(
+            badge = {
+                if (favoritesCount > 0) {
+                    Badge(
+                        containerColor = Color(0xFFFFD700)
                     ) {
-                        IconButton(onClick = onFavoritesClick) {
-                            Text(
-                                text = "⭐",
-                                fontSize = 20.sp
-                            )
-                        }
-                    }
-
-                    // Кнопка сортировки
-                    IconButton(onClick = onSortClick) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Сортировка",
-                            tint = Color.White
+                        Text(
+                            text = favoritesCount.toString(),
+                            fontSize = 9.sp,
+                            color = Color.Black
                         )
-                    }
-
-                    // Кнопка обновления
-                    IconButton(
-                        onClick = onRefresh,
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Обновить",
-                                tint = Color.White
-                            )
-                        }
                     }
                 }
             }
+        ) {
+            IconButton(
+                onClick = onFavoritesClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Text(
+                    text = "⭐",
+                    fontSize = 16.sp
+                )
+            }
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
+        // Кнопка сортировки
+        IconButton(
+            onClick = onSortClick,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Menu,
+                contentDescription = "Сортировка",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
 
-            // Поле поиска
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        text = "Поиск: ИКАО / город / явления...",
-                        color = Color.Gray
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Поиск",
-                        tint = Color.Gray
-                    )
-                },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFF3D7AD9),
-                    unfocusedBorderColor = Color.Gray,
-                    cursorColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp)
+        // Кнопка обновления
+        IconButton(
+            onClick = onRefresh,
+            enabled = !isLoading,
+            modifier = Modifier.size(36.dp)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Обновить",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Компактная информация о статусе для размещения в одну строку
+ */
+@Composable
+fun CompactStatusInfo(
+    count: Int,
+    lastUpdate: Long,
+    isLoading: Boolean
+) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Аэродромов: $count",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
+        if (isLoading) {
+            Text(
+                text = "Обновление...",
+                fontSize = 10.sp,
+                color = Color(0xFF3D7AD9)
+            )
+        } else if (lastUpdate > 0) {
+            Text(
+                text = "Обн: ${timeFormat.format(Date(lastUpdate))}",
+                fontSize = 10.sp,
+                color = Color.Gray
             )
         }
     }
 }
 
 /**
- * Статус бар
+ * Статус бар (оставлен для совместимости)
  */
 @Composable
 fun StatusBar(
@@ -453,9 +455,9 @@ fun StatusBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Количество аэропортов
+        // Количество аэродромов
         Text(
-            text = "Аэропортов: $count",
+            text = "Аэродромов: $count",
             fontSize = 13.sp,
             color = Color.Gray
         )
@@ -491,12 +493,13 @@ fun MetarList(
     metarList: List<MetarData>,
     favorites: Set<String>,
     onMetarClick: (MetarData) -> Unit,
-    onFavoriteClick: (String) -> Unit
+    onFavoriteClick: (String) -> Unit,
+    onNotamClick: (MetarData) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(
             items = metarList,
@@ -506,6 +509,7 @@ fun MetarList(
                 metar = metar,
                 isFavorite = metar.icao in favorites,
                 onFavoriteClick = { onFavoriteClick(metar.icao) },
+                onNotamClick = { onNotamClick(metar) },
                 onClick = { onMetarClick(metar) }
             )
         }

@@ -70,7 +70,9 @@ data class MetarData(
     val qnhHpa: Float? = null,
     val rawMetar: String? = null,
     val source: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val notamCount: Int = 0,
+    val notamList: List<NotamData> = emptyList()
 ) {
     val cityName: String get() = AirportData.getCityName(icao)
 
@@ -149,29 +151,52 @@ data class MetarData(
             "VA" to "вулканический пепел", "PO" to "пылевые вихри",
             "SQ" to "шквал", "FC" to "смерч", "DS" to "пылевая буря", "SS" to "песчаная буря"
         )
+        
+        // Творительный падеж для правильного склонения
+        val phenomenaInstrumental = mapOf(
+            "DZ" to "моросью", "RA" to "дождём", "SN" to "снегом",
+            "SG" to "снежными зёрнами", "IC" to "ледяными кристаллами",
+            "PL" to "ледяной крупой", "GR" to "градом", "GS" to "мелким градом",
+            "UP" to "неопред. осадками", "FG" to "туманом", "BR" to "дымкой",
+            "HZ" to "мглой", "FU" to "дымом", "DU" to "пылью", "SA" to "песком",
+            "VA" to "вулканическим пеплом", "PO" to "пылевыми вихрями",
+            "SQ" to "шквалом", "FC" to "смерчем", "DS" to "пылевой бурей", "SS" to "песчаной бурей"
+        )
 
         // Собираем все явления из оставшейся части
         val phenomenaList = mutableListOf<String>()
         var i = 0
         while (i + 1 < c.length) {
             val twoChar = c.substring(i, i + 2)
-            phenomena[twoChar]?.let { phenomenaList.add(it) }
+            phenomena[twoChar]?.let { phenomenaList.add(twoChar) }
             i += 2
         }
-
+        
         // Если есть только одно явление - оставляем его как есть
         if (c.length == 2) {
             phenomenaList.clear()
-            phenomena[c]?.let { phenomenaList.add(it) }
+            if (phenomena.containsKey(c)) {
+                phenomenaList.add(c)
+            }
         }
 
         // Формируем итоговую строку
         if (descriptor.isNotEmpty()) {
             result.append("$descriptor ")
         }
-
+        
         if (phenomenaList.isNotEmpty()) {
-            result.append(phenomenaList.joinToString(" со "))
+            if (phenomenaList.size == 1) {
+                // Одно явление - именительный падеж
+                result.append(phenomena[phenomenaList[0]] ?: phenomenaList[0])
+            } else {
+                // Несколько явлений - первое в именительном, остальные в творительном через "с"
+                result.append(phenomena[phenomenaList[0]] ?: phenomenaList[0])
+                for (idx in 1 until phenomenaList.size) {
+                    result.append(" с ")
+                    result.append(phenomenaInstrumental[phenomenaList[idx]] ?: phenomena[phenomenaList[idx]] ?: phenomenaList[idx])
+                }
+            }
         } else if (c.isNotEmpty()) {
             result.append(phenomena[c] ?: c)
         }

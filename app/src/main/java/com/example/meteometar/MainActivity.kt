@@ -7,6 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -108,38 +112,66 @@ fun MeteoApp(onExit: () -> Unit) {
                 color = DarkSurface,
                 shadowElevation = 4.dp
             ) {
-                Column {
-                    // Кнопка закрытия приложения
+                // Всё в одну строку: переключатели METAR/TAF + поиск + кнопка X
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Переключатели METAR/TAF
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.Start
                     ) {
-                        OutlinedButton(
-                            onClick = { showExitDialog = true },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFFF6B6B)
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                width = 1.dp,
-                                color = Color(0xFFFF6B6B)
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "✕ Закрыть",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        CompactTabButton(
+                            text = "METAR",
+                            isSelected = currentTab == MainTab.METAR,
+                            selectedColor = Color(0xFF3D7AD9),
+                            onClick = { currentTab = MainTab.METAR }
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        CompactTabButton(
+                            text = "TAF",
+                            isSelected = currentTab == MainTab.TAF,
+                            selectedColor = Color(0xFF5C6BC0),
+                            onClick = { currentTab = MainTab.TAF }
+                        )
+                    }
+
+                    // Поиск (занимает оставшееся место)
+                    Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        when (val screen = currentScreen) {
+                            is Screen.MetarList -> {
+                                CompactSearchField(
+                                    searchQuery = metarViewModel.uiState.collectAsState().value.searchQuery,
+                                    onSearchChange = metarViewModel::updateSearchQuery
+                                )
+                            }
+                            is Screen.TafList -> {
+                                CompactSearchField(
+                                    searchQuery = tafViewModel.uiState.collectAsState().value.searchQuery,
+                                    onSearchChange = tafViewModel::updateSearchQuery
+                                )
+                            }
+                            else -> {}
                         }
                     }
 
-                    // Переключатель вкладок
-                    TabSwitcherContent(
-                        currentTab = currentTab,
-                        onTabChange = { currentTab = it }
-                    )
+                    // Кнопка закрытия X
+                    IconButton(
+                        onClick = { showExitDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text(
+                            text = "✕",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF6B6B)
+                        )
+                    }
                 }
             }
         }
@@ -210,41 +242,104 @@ fun MeteoApp(onExit: () -> Unit) {
 }
 
 /**
- * Переключатель вкладок METAR / TAF
+ * Компактная кнопка переключателя
  */
 @Composable
-fun TabSwitcherContent(
-    currentTab: MainTab,
-    onTabChange: (MainTab) -> Unit
+fun CompactTabButton(
+    text: String,
+    isSelected: Boolean,
+    selectedColor: Color,
+    onClick: () -> Unit
 ) {
-    Row(
+    val backgroundColor = if (isSelected) selectedColor else Color.Transparent
+    val textColor = if (isSelected) Color.White else Color.Gray
+    val borderColor = if (isSelected) selectedColor else Color.Gray
+
+    OutlinedButton(
+        onClick = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center
+            .height(56.dp)
+            .width(80.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = backgroundColor,
+            contentColor = textColor
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isSelected) 0.dp else 1.dp,
+            color = borderColor
+        ),
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
     ) {
-        // METAR кнопка
-        TabButton(
-            text = "METAR",
-            subtitle = "Текущая погода",
-            isSelected = currentTab == MainTab.METAR,
-            selectedColor = Color(0xFF3D7AD9),
-            onClick = { onTabChange(MainTab.METAR) },
-            modifier = Modifier.weight(1f)
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // TAF кнопка
-        TabButton(
-            text = "TAF",
-            subtitle = "Прогноз",
-            isSelected = currentTab == MainTab.TAF,
-            selectedColor = Color(0xFF5C6BC0),
-            onClick = { onTabChange(MainTab.TAF) },
-            modifier = Modifier.weight(1f)
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
         )
     }
+}
+
+/**
+ * Компактное поле поиска
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompactSearchField(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp),
+        placeholder = {
+            Text(
+                text = "Поиск...",
+                color = Color.Gray,
+                fontSize = 14.sp
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Поиск",
+                tint = Color.Gray,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+                IconButton(
+                    onClick = { onSearchChange("") },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Очистить поиск",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            focusedBorderColor = Color(0xFF3D7AD9),
+            unfocusedBorderColor = Color.Gray,
+            cursorColor = Color.White,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent
+        ),
+        shape = RoundedCornerShape(8.dp),
+        textStyle = LocalTextStyle.current.copy(
+            fontSize = 14.sp,
+            color = Color.White
+        )
+    )
 }
 
 /**
@@ -304,45 +399,3 @@ fun ExitConfirmationDialog(
     )
 }
 
-@Composable
-fun TabButton(
-    text: String,
-    subtitle: String,
-    isSelected: Boolean,
-    selectedColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor = if (isSelected) selectedColor else Color.Transparent
-    val textColor = if (isSelected) Color.White else Color.Gray
-    val borderColor = if (isSelected) selectedColor else Color.Gray
-
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = backgroundColor,
-            contentColor = textColor
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (isSelected) 0.dp else 1.dp,
-            color = borderColor
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = text,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = subtitle,
-                fontSize = 10.sp,
-                color = if (isSelected) Color.White.copy(alpha = 0.8f) else Color.Gray
-            )
-        }
-    }
-}

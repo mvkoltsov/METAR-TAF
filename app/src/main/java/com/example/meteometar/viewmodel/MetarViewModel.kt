@@ -9,6 +9,7 @@ import com.example.meteometar.data.MetarData
 import com.example.meteometar.data.SettingsManager
 import com.example.meteometar.data.SortOption
 import com.example.meteometar.network.MetarRepository
+import com.example.meteometar.network.NotamRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,16 +83,20 @@ class MetarViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // Получаем аэропорты выбранных стран
+            // Получаем аэродромы выбранных стран
             val countryIcaoList = AirportData.getIcaoListForCountries(_uiState.value.selectedCountries)
 
-            // Добавляем избранные аэропорты (чтобы они загружались всегда)
+            // Добавляем избранные аэродромы (чтобы они загружались всегда)
             val favorites = _uiState.value.favorites
             val allIcaoList = (countryIcaoList + favorites).distinct()
 
             MetarRepository.fetchMetarForAirports(allIcaoList)
                 .onSuccess { data ->
                     allMetarData = data
+
+                    // Загружаем NOTAM для всех аэродромов
+                    loadNotamForAirports(allIcaoList)
+
                     applyFilter()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -103,6 +108,27 @@ class MetarViewModel(application: Application) : AndroidViewModel(application) {
                         isLoading = false,
                         error = "Ошибка загрузки: ${e.message}"
                     )
+                }
+        }
+    }
+
+    /**
+     * Загружает NOTAM для списка аэродромов
+     */
+    private fun loadNotamForAirports(icaoList: List<String>) {
+        viewModelScope.launch {
+            NotamRepository.fetchNotamForAirports(icaoList)
+                .onSuccess { notamMap: Map<String, List<com.example.meteometar.data.NotamData>> ->
+                    // Обновляем MetarData с NOTAM
+                    val updatedMetarData = allMetarData.mapValues { (icao: String, metar: MetarData) ->
+                        val notams = notamMap[icao] ?: emptyList()
+                        metar.copy(
+                            notamCount = notams.size,
+                            notamList = notams
+                        )
+                    }
+                    allMetarData = updatedMetarData
+                    applyFilter()
                 }
         }
     }

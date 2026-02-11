@@ -17,17 +17,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meteometar.data.Country
 import com.example.meteometar.data.SortOption
 import com.example.meteometar.data.TafData
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.meteometar.ui.components.TafCard
 import com.example.meteometar.ui.theme.DarkBackground
 import com.example.meteometar.ui.theme.DarkSurface
 import com.example.meteometar.viewmodel.TafViewModel
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
  * Экран со списком TAF
@@ -45,17 +47,45 @@ fun TafListScreen(
 
     Scaffold(
         topBar = {
-            TafTopBar(
-                searchQuery = uiState.searchQuery,
-                onSearchChange = viewModel::updateSearchQuery,
-                onRefresh = viewModel::loadTaf,
-                isLoading = uiState.isLoading,
-                sortOption = uiState.sortOption,
-                onSortClick = { showSortMenu = true },
-                favoritesCount = uiState.favorites.size,
-                onFavoritesClick = onFavoritesClick,
-                onExit = onExit
-            )
+            Surface(
+                color = DarkSurface,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Выбор страны
+                    TafCountryDropdown(
+                        countries = uiState.countries,
+                        selectedCountries = uiState.selectedCountries,
+                        onCountryToggle = viewModel::toggleCountry
+                    )
+
+                    // Статус: количество и время
+                    TafCompactStatusInfo(
+                        count = uiState.tafList.size,
+                        lastUpdate = uiState.lastUpdate,
+                        isLoading = uiState.isLoading
+                    )
+
+                    // Кнопки
+                    TafTopBar(
+                        searchQuery = uiState.searchQuery,
+                        onSearchChange = viewModel::updateSearchQuery,
+                        onRefresh = viewModel::loadTaf,
+                        isLoading = uiState.isLoading,
+                        sortOption = uiState.sortOption,
+                        onSortClick = { showSortMenu = true },
+                        favoritesCount = uiState.favorites.size,
+                        onFavoritesClick = onFavoritesClick,
+                        onExit = onExit
+                    )
+                }
+            }
         },
         containerColor = DarkBackground
     ) { paddingValues ->
@@ -69,21 +99,6 @@ fun TafListScreen(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Выбор страны
-                TafCountryDropdown(
-                    countries = uiState.countries,
-                    selectedCountries = uiState.selectedCountries,
-                    onCountryToggle = viewModel::toggleCountry
-                )
-
-                // Статус бар
-                TafStatusBar(
-                    count = uiState.tafList.size,
-                    lastUpdate = uiState.lastUpdate,
-                    isLoading = uiState.isLoading,
-                    error = uiState.error
-                )
-
                 // Список TAF
                 if (uiState.isLoading && uiState.tafList.isEmpty()) {
                     TafLoadingContent()
@@ -129,7 +144,7 @@ fun TafListScreen(
 }
 
 /**
- * Выпадающий список для выбора страны
+ * Компактный выбор страны для TAF
  */
 @Composable
 fun TafCountryDropdown(
@@ -140,33 +155,36 @@ fun TafCountryDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     val selectedText = if (selectedCountries.isEmpty()) {
-        "Выберите страны"
+        "Страны"
     } else {
-        val selectedNames = countries
-            .filter { it.code in selectedCountries }
-            .map { "${it.flag} ${it.name}" }
-        if (selectedNames.size <= 2) {
-            selectedNames.joinToString(", ")
+        val count = selectedCountries.size
+        if (count == 1) {
+            val country = countries.find { it.code in selectedCountries }
+            "${country?.flag ?: ""} ${country?.name ?: "Страны"}"
         } else {
-            "${selectedNames.take(2).joinToString(", ")} +${selectedNames.size - 2}"
+            val country = countries.find { it.code in selectedCountries }
+            "${country?.flag ?: ""} ${country?.name ?: ""} +${count - 1}"
         }
     }
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .width(130.dp)
     ) {
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = Color.White
             ),
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = Color.Gray
-            )
+            ),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -175,13 +193,15 @@ fun TafCountryDropdown(
             ) {
                 Text(
                     text = selectedText,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = Color.White,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = if (expanded) "▲" else "▼",
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = Color.Gray
                 )
             }
@@ -206,7 +226,7 @@ fun TafCountryDropdown(
                             Text(
                                 text = "${country.flag} ${country.name}",
                                 color = Color.White,
-                                fontSize = 15.sp
+                                fontSize = 14.sp
                             )
                             if (isSelected) {
                                 Text(
@@ -281,7 +301,7 @@ fun TafSortMenuDialog(
 }
 
 /**
- * Верхняя панель TAF
+ * Компактная панель только с кнопками TAF
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -296,119 +316,111 @@ fun TafTopBar(
     onFavoritesClick: () -> Unit,
     onExit: () -> Unit = {}
 ) {
-    Surface(
-        color = DarkSurface,
-        shadowElevation = 4.dp
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Прогноз TAF",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-
-                Row {
-                    // Кнопка избранного
-                    BadgedBox(
-                        badge = {
-                            if (favoritesCount > 0) {
-                                Badge(
-                                    containerColor = Color(0xFFFFD700)
-                                ) {
-                                    Text(
-                                        text = favoritesCount.toString(),
-                                        fontSize = 10.sp,
-                                        color = Color.Black
-                                    )
-                                }
-                            }
-                        }
+        // Кнопка избранного
+        BadgedBox(
+            badge = {
+                if (favoritesCount > 0) {
+                    Badge(
+                        containerColor = Color(0xFFFFD700)
                     ) {
-                        IconButton(onClick = onFavoritesClick) {
-                            Text(
-                                text = "⭐",
-                                fontSize = 20.sp
-                            )
-                        }
-                    }
-
-                    // Кнопка сортировки
-                    IconButton(onClick = onSortClick) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Сортировка",
-                            tint = Color.White
+                        Text(
+                            text = favoritesCount.toString(),
+                            fontSize = 9.sp,
+                            color = Color.Black
                         )
-                    }
-
-                    // Кнопка обновления
-                    IconButton(
-                        onClick = onRefresh,
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Обновить",
-                                tint = Color.White
-                            )
-                        }
                     }
                 }
             }
+        ) {
+            IconButton(
+                onClick = onFavoritesClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Text(
+                    text = "⭐",
+                    fontSize = 16.sp
+                )
+            }
+        }
 
-            Spacer(modifier = Modifier.height(12.dp))
+        // Кнопка сортировки
+        IconButton(
+            onClick = onSortClick,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Menu,
+                contentDescription = "Сортировка",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
 
-            // Поле поиска
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        text = "Поиск: ИКАО / город / явления...",
-                        color = Color.Gray
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Поиск",
-                        tint = Color.Gray
-                    )
-                },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFF5C6BC0),
-                    unfocusedBorderColor = Color.Gray,
-                    cursorColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp)
+        // Кнопка обновления
+        IconButton(
+            onClick = onRefresh,
+            enabled = !isLoading,
+            modifier = Modifier.size(36.dp)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Обновить",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Компактная информация о статусе TAF
+ */
+@Composable
+fun TafCompactStatusInfo(
+    count: Int,
+    lastUpdate: Long,
+    isLoading: Boolean
+) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Аэродромов: $count",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
+        if (isLoading) {
+            Text(
+                text = "Обновление...",
+                fontSize = 10.sp,
+                color = Color(0xFF5C6BC0)
+            )
+        } else if (lastUpdate > 0) {
+            Text(
+                text = "Обн: ${timeFormat.format(Date(lastUpdate))}",
+                fontSize = 10.sp,
+                color = Color.Gray
             )
         }
     }
 }
 
 /**
- * Статус бар
+ * Статус бар (оставлен для совместимости)
  */
 @Composable
 fun TafStatusBar(

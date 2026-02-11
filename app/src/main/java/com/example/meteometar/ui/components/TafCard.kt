@@ -23,7 +23,7 @@ import com.example.meteometar.data.TafData
 import com.example.meteometar.ui.theme.*
 
 /**
- * Карточка TAF данных
+ * Карточка TAF данных - КОМПАКТНАЯ версия
  */
 @Composable
 fun TafCard(
@@ -42,165 +42,145 @@ fun TafCard(
         colors = CardDefaults.cardColors(
             containerColor = DarkCard
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(8.dp)
         ) {
-            // Верхняя строка: Флаг, Город, ICAO, Избранное, TAF badge
+            // Строка 1: Флаг, Город (ICAO), ВПП, Рабочая, ⭐, TAF badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Флаг страны
+                // Флаг
                 if (country != null) {
-                    Text(
-                        text = country.flag,
-                        fontSize = 24.sp,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+                    Text(text = country.flag, fontSize = 16.sp)
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = taf.cityName,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                // Город (ICAO) - основная информация
+                Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = taf.icao,
-                            fontSize = 14.sp,
+                            text = taf.cityName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text(
+                            text = " (${taf.icao})",
+                            fontSize = 12.sp,
                             color = Color.Gray
                         )
-                        // Информация о ВПП
-                        val runwayInfo = RunwayDatabase.getRunwayInfo(taf.icao)
-                        if (runwayInfo.isNotEmpty()) {
-                            Text(
-                                text = " • ",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                            Text(
-                                text = "ВПП: $runwayInfo",
-                                fontSize = 12.sp,
-                                color = Color(0xFF81C784),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
-                    // Активная ВПП на основе ветра из TAF
+                    // ВПП + Рабочая в одну строку
+                    val runwayInfo = RunwayDatabase.getRunwayInfo(taf.icao)
                     val activeRwy = RunwayDatabase.getActiveRunway(taf.icao, taf.wind.directionDeg)
-                    if (activeRwy != null) {
-                        Text(
-                            text = "✈ Рабочая: $activeRwy",
-                            fontSize = 11.sp,
-                            color = Color(0xFF64B5F6),
-                            fontWeight = FontWeight.Medium
-                        )
+                    if (runwayInfo.isNotEmpty() || activeRwy != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (runwayInfo.isNotEmpty()) {
+                                Text(text = runwayInfo, fontSize = 10.sp, color = Color(0xFF81C784))
+                            }
+                            if (activeRwy != null) {
+                                Text(text = if (runwayInfo.isNotEmpty()) " → $activeRwy" else "→ $activeRwy",
+                                     fontSize = 10.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
 
-                // Кнопка избранного
-                IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
+                // Избранное
+                IconButton(onClick = onFavoriteClick, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
-                        contentDescription = if (isFavorite) "Убрать из избранного" else "Добавить в избранное",
-                        tint = if (isFavorite) Color(0xFFFFD700) else Color.Gray
+                        contentDescription = null,
+                        tint = if (isFavorite) Color(0xFFFFD700) else Color.Gray,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // TAF бейдж
-                TafBadge()
+                // TAF badge (компактный)
+                CompactTafBadge()
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Период действия
-            val validPeriod = taf.getValidPeriodDisplay()
-            if (validPeriod.isNotEmpty()) {
-                Text(
-                    text = "⏰ $validPeriod",
-                    fontSize = 12.sp,
-                    color = Color(0xFF81C784),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Данные в двух колонках
+            // Строка 2: Период | Ветер | Видимость | Облачность | Изменения
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Левая колонка
-                Column(modifier = Modifier.weight(1f)) {
-                    TafDataRow(label = "Ветер", value = taf.wind.toDisplayString())
-                    TafDataRow(label = "Видимость", value = taf.getVisibilityString())
-                }
-
-                // Правая колонка
-                Column(modifier = Modifier.weight(1f)) {
-                    TafDataRow(label = "Облачность", value = taf.getCloudsDisplay())
-                    TafDataRow(
-                        label = "Изменения",
-                        value = if (taf.changes.isNotEmpty()) "${taf.changes.size} прогноз(ов)" else "нет"
+                // Период действия
+                val validPeriod = taf.getValidPeriodDisplay()
+                if (validPeriod.isNotEmpty()) {
+                    Text(
+                        text = validPeriod,
+                        fontSize = 10.sp,
+                        color = Color(0xFF81C784),
+                        maxLines = 1,
+                        modifier = Modifier.weight(1.2f)
                     )
                 }
+                // Ветер
+                TafCompactDataItem(label = "💨", value = taf.wind.toDisplayString(), modifier = Modifier.weight(1f))
+                // Видимость
+                TafCompactDataItem(label = "👁", value = taf.getVisibilityString(), modifier = Modifier.weight(0.8f))
+                // Облачность
+                TafCompactDataItem(label = "☁", value = taf.getCloudsDisplay(), modifier = Modifier.weight(1f))
+                // Изменения
+                val changesText = if (taf.changes.isNotEmpty()) "${taf.changes.size}" else "-"
+                TafCompactDataItem(label = "📋", value = changesText, modifier = Modifier.weight(0.5f))
             }
 
-            // Погодные явления
+            // Строка 3: Явления + Время (только если есть)
             val weather = taf.getWeatherDisplay()
-            if (weather.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Явления: $weather",
-                    fontSize = 13.sp,
-                    color = Color(0xFFFFB74D),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Время выпуска
             val issueTime = taf.getIssueTimeDisplay()
-            if (issueTime.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Выпущен: $issueTime",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+            if (weather.isNotEmpty() || issueTime.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (weather.isNotEmpty()) {
+                        Text(
+                            text = weather,
+                            fontSize = 11.sp,
+                            color = Color(0xFFFFB74D),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (issueTime.isNotEmpty()) {
+                        Text(
+                            text = issueTime,
+                            fontSize = 10.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 /**
- * TAF бейдж
+ * Компактный TAF бейдж
  */
 @Composable
-fun TafBadge() {
+fun CompactTafBadge() {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(Color(0xFF5C6BC0))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
             text = "TAF",
-            fontSize = 14.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
         )
@@ -208,28 +188,21 @@ fun TafBadge() {
 }
 
 /**
- * Строка данных TAF
+ * Компактный элемент данных TAF
  */
 @Composable
-fun TafDataRow(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    if (value.isNotEmpty()) {
-        Column(modifier = modifier.padding(vertical = 2.dp)) {
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                color = Color.Gray
-            )
-            Text(
-                text = value,
-                fontSize = 14.sp,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+fun TafCompactDataItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontSize = 10.sp)
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

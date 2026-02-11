@@ -1,7 +1,7 @@
 package com.example.meteometar.data
 
 /**
- * Страна с её аэропортами
+ * Страна с её аэродромами
  */
 data class Country(
     val code: String,        // Код страны (KZ, UZ, RU...)
@@ -11,7 +11,7 @@ data class Country(
 )
 
 /**
- * Казахстанские и соседние аэропорты с их ICAO кодами и названиями
+ * Казахстанские и соседние аэродромы с их ICAO кодами и названиями
  */
 object AirportData {
 
@@ -353,7 +353,7 @@ object AirportData {
         )
     )
 
-    // Для обратной совместимости - только казахстанские аэропорты
+    // Для обратной совместимости - только казахстанские аэродромы
     val KZ_AIRPORTS: Map<String, String> = COUNTRIES.first { it.code == "KZ" }.airports
 
     val ICAO_LIST: List<String> = KZ_AIRPORTS.keys.toList()
@@ -370,7 +370,7 @@ object AirportData {
     }
 
     /**
-     * Получить страну по ICAO коду аэропорта
+     * Получить страну по ICAO коду аэродрома
      */
     fun getCountryByIcao(icao: String): Country? {
         val upperIcao = icao.uppercase()
